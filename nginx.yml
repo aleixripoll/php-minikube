@@ -1,0 +1,70 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: nginx-configmap
+  namespace: ns-test
+data:
+  default.conf: |
+    server {
+      listen 80;        
+      #root /usr/share/nginx/html;
+      root /app;
+      #location / {
+      #  try_files $uri $uri/ =404;
+      #}
+      location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param REQUEST_METHOD $request_method;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass phpfpm-service:9000;
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: ns-test
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          resources:
+            requests:
+              cpu: 20m
+            limits:
+              cpu: 200m
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-volume
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-volume
+          configMap:
+            name: nginx-configmap
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: ns-test
+spec:
+  type: NodePort
+  #type: LoadBalancer
+  ports:
+    - port: 80
+      protocol: TCP
+  selector:
+    app: nginx

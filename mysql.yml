@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: ns-test
+  labels:
+    app: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mariadb
+          env:
+            - name: MYSQL_DATABASE
+              value: "testdb"
+            # kubectl create secret generic mysql-secrets --from-literal=rootpw=secret123 --namespace ns-test
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: rootpw
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: "mysql-schema"
+              mountPath: "/docker-entrypoint-initdb.d"
+            - name: mysql-volume
+              mountPath: "/var/lib/mysql"
+
+      volumes:
+        - name: mysql-volume
+          persistentVolumeClaim:
+            claimName: mysql-volume-claim
+        - name: mysql-schema
+          hostPath:
+            # minikube mount $PWD/mysql-init:/mysql-init/
+            path: "/mysql-init"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: ns-test
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
